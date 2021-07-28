@@ -82,7 +82,5 @@ class MazeEnv(gym.Env):
 
     def do_action(self, action):
         # converting into string and send to unity
-        action_to_send = np.array_str(action)
-        action_to_send = action_to_send[2:(len(action_to_send) - 2)]
-        action_to_send = action_to_send.replace("  ", ",")
-        self.sock.sendall(action_to_send.encode("UTF-8"))
+        action_to_send = bytearray(struct.pack('f',action[0])) + bytearray(struct.pack('f',action[1]))
+        self.sock.sendall(action_to_send)
