@@ -13,12 +13,13 @@ import struct
 # idea = use texture 2D and get pixel method
 # use coroutine to process the frame by frame
 # setting timescale to 0 will pause the game
+# TODO: use unity event system for handling movement and input data
 class MazeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self):
         # c# and python communication
-        host, port = "127.0.0.1", 25001
+        host, port = "127.0.0.1", 25002
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((host, port))
 
@@ -45,6 +46,10 @@ class MazeEnv(gym.Env):
         self.current_step = 0
         self.done = False
         self.episodes += 1
+        # send signal to unity to reset
+        action_to_send = bytearray(b'\x00' * 8 + b'\x01')
+        self.sock.sendall(action_to_send)
+        return self.get_observation()
 
     def render(self, mode='human'):
         # render is handled on the unity side
@@ -53,6 +58,7 @@ class MazeEnv(gym.Env):
     def close(self):
         # prob some script that gives unity application to stop/close or just manually closing
         print("Application Closed.")
+        self.sock.close()
         raise SystemExit(0)
 
     def get_reward(self):
@@ -63,6 +69,8 @@ class MazeEnv(gym.Env):
         return total_reward
 
     def receive(self):
+        # if it is too fast, then unity can't handle it
+        time.sleep(2)
         received_data = bytearray(self.sock.recv(9))
         if self.current_step >= self.step_that_can_be_taken or received_data[0] == 0x01:
             self.done = True
@@ -72,6 +80,7 @@ class MazeEnv(gym.Env):
             print("Error on get_done")
         x_coordinate = struct.unpack('f', received_data[1:5])
         y_coordinate = struct.unpack('f', received_data[5:9])
+        print(x_coordinate)
         return x_coordinate, y_coordinate
 
     def get_observation(self):
@@ -81,6 +90,5 @@ class MazeEnv(gym.Env):
         return screen
 
     def do_action(self, action):
-        # converting into string and send to unity
-        action_to_send = bytearray(struct.pack('f',action[0])) + bytearray(struct.pack('f',action[1]))
+        action_to_send = bytearray(struct.pack('f',action[0])) + bytearray(struct.pack('f',action[1]) + b'\x00')
         self.sock.sendall(action_to_send)
